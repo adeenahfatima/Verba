@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Verba</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <img src="logo.png" alt="Verba Logo" class="logo">
+      <span class="brand">Verba</span>
+    </div>
+    <div class="header-right">
+      <a href="upload.html" class="btn btn-primary">Upload New Audio</a>
+      <a href="#" id="logout-btn" class="btn btn-secondary">Logout</a>
+    </div>
+  </header>
+  <main class="main-content">
+    <section class="intro-section" id="recent-analysis-section">
+      <h2>Most Recent Analysis</h2>
+      <div id="recent-analysis"></div>
+    </section>
+    <section class="intro-section" id="profile-section">
+      <h1 id="welcome-user">Welcome!</h1>
+      <div id="user-stats" style="margin-top: 16px;"></div>
+    </section>
+    <section class="feature-cards" id="uploads-list" style="display: flex; flex-direction: column; align-items: center;">
+      <!-- Upload history will be inserted here -->
+    </section>
+  </main>
+  <footer class="footer">
+    <div class="footer-left">
+      <div class="footer-brand-row">
+        <img src="logo.png" alt="Verba Logo" class="footer-logo">
+        <span>Verba</span>
+      </div>
+      <div class="footer-desc">Your personal AI companion for confident communication.</div>
+      <div class="footer-copy">&copy; Copyright 2025. All rights reserved.</div>
+      <div class="footer-copy">&copy; Made with ❤️ by Adina Fatima.</div>
+    </div>
+    <div class="footer-links">
+      <div>
+        <strong>Customer Service</strong>
+        <ul>
+          <li>Contact Us</li>
+          <li>Privacy Policy</li>
+          <li>Terms and Conditions</li>
+        </ul>
+      </div>
+      <div>
+        <strong>Use Cases</strong>
+        <ul>
+          <li>Class Presentations</li>
+          <li>Interviews</li>
+          <li>Debates</li>
+          <li>Speech Practice</li>
+          <li>Personal Confidence</li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+  <script>
+    // Get logged-in user
+    const user = JSON.parse(localStorage.getItem('verbaUser'));
+    if (!user) {
+      window.location.href = 'login.html';
+    }
+    document.getElementById('welcome-user').textContent = `Welcome, ${user.username}!`;
+
+    // Fetch and display user stats
+    fetch(`http://127.0.0.1:5000/profile/${user.id}`)
+      .then(res => res.json())
+      .then(stats => {
+        document.getElementById('user-stats').innerHTML = `
+          <div style="display:flex; gap:32px; justify-content:center; flex-wrap:wrap;">
+            <div class="feature-card"><div class="feature-title">Best WPM</div><div class="feature-body" style="font-size:2rem;">${stats.best_wpm || 0}</div></div>
+            <div class="feature-card"><div class="feature-title">Lowest Filler Words</div><div class="feature-body" style="font-size:2rem;">${stats.lowest_filler || 0}</div></div>
+            <div class="feature-card"><div class="feature-title">Longest Speech (words)</div><div class="feature-body" style="font-size:2rem;">${stats.longest_speech || 0}</div></div>
+            <div class="feature-card"><div class="feature-title">Total Uploads</div><div class="feature-body" style="font-size:2rem;">${stats.total_uploads || 0}</div></div>
+          </div>
+        `;
+      });
+
+    // Fetch and display upload history
+    fetch(`http://127.0.0.1:5000/uploads/${user.id}`)
+      .then(res => res.json())
+      .then(uploads => {
+        // Most Recent Analysis
+        const recentDiv = document.getElementById('recent-analysis');
+        if (!uploads.length) {
+          recentDiv.innerHTML = '<div style="text-align:center;">No uploads yet. Upload a file to see your analysis here!</div>';
+        } else {
+          const u = uploads[0];
+          recentDiv.innerHTML = `
+            <div class="feature-card" style="max-width:700px; margin:0 auto;">
+              <div class="feature-title">${u.filename} <span style="font-size:0.9rem; color:#888;">(${new Date(u.timestamp).toLocaleString()})</span></div>
+              <div class="feature-body"><b>WPM:</b> ${u.wpm} &nbsp; <b>Filler Words:</b> ${u.filler_count} &nbsp; <b>Pauses:</b> ${u.pause_count} &nbsp; <b>Total Words:</b> ${u.total_words}</div>
+              <div class="feature-body" style="margin-top:10px;">
+                <button onclick="showDetails(${JSON.stringify(u).replace(/"/g, '&quot;')})" class="btn btn-secondary" style="margin-top:8px;">View Full Transcript</button>
+              </div>
+            </div>
+          `;
+        }
+        // Uploads list (history)
+        const uploadsList = document.getElementById('uploads-list');
+        uploadsList.innerHTML = '<h2 style="text-align:center; margin-bottom:24px; width:100%;">Upload History</h2>';
+        if (!uploads.length) {
+          uploadsList.innerHTML += '<div style="text-align:center; width:100%;">No uploads yet.</div>';
+          return;
+        }
+        // Add a grid container for the cards
+        uploadsList.innerHTML += '<div id="uploads-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 32px; width: 100%; max-width: 1200px; margin: 0 auto;">';
+        uploads.forEach(u => {
+          document.getElementById('uploads-grid').innerHTML += `
+            <div class="feature-card" style="min-width:320px; max-width:600px; display: flex; flex-direction: column; align-items: center; text-align: center; justify-content: center;">
+              <div class="feature-title" style="width:100%; text-align:center;">${u.filename} <span style="font-size:0.9rem; color:#888;">(${new Date(u.timestamp).toLocaleString()})</span></div>
+              <div class="feature-body" style="margin-bottom: 8px;"><b>WPM:</b> ${u.wpm} &nbsp; <b>Filler Words:</b> ${u.filler_count} &nbsp; <b>Pauses:</b> ${u.pause_count}</div>
+              <div class="feature-body" style="margin-bottom: 18px;"><b>Total Words:</b> ${u.total_words}</div>
+              <button onclick="showDetails(${JSON.stringify(u).replace(/\"/g, '&quot;')})" class="btn btn-secondary" style="margin-top: 8px;">View Details</button>
+            </div>
+          `;
+        });
+        uploadsList.innerHTML += '</div>';
+      });
+
+    // Function to show upload details in modal
+    window.showDetails = function(upload) {
+      const modal = document.createElement('div');
+      modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+      `;
+      
+      modal.innerHTML = `
+        <div style="
+          background: white;
+          padding: 32px;
+          border-radius: 16px;
+          max-width: 800px;
+          max-height: 80vh;
+          overflow-y: auto;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        ">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <h2 style="margin: 0;">${upload.filename}</h2>
+            <button onclick="this.closest('.modal').remove()" style="
+              background: none;
+              border: none;
+              font-size: 24px;
+              cursor: pointer;
+              color: #666;
+            ">&times;</button>
+          </div>
+
+          <div style="margin-bottom: 24px; text-align:center;">
+            <div style="font-size: 2.5rem; font-weight: bold; color: #007bff; margin-bottom: 8px;">${upload.score !== undefined ? upload.score + '/100' : 'N/A'}</div>
+            <div style="font-size: 1.1rem; color: #444; margin-bottom: 16px;">Overall Score</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 16px; justify-content: center;">
+              <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
+                <b>Pitch Variation:</b> ${upload.pitch_std !== undefined ? upload.pitch_std.toFixed(2) : 'N/A'}<br>
+                <span style="font-size:12px; color:#888;">(Higher = more expressive)</span>
+              </div>
+              <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
+                <b>Volume Mean:</b> ${upload.volume_mean !== undefined ? upload.volume_mean.toFixed(4) : 'N/A'}<br>
+                <b>Std:</b> ${upload.volume_std !== undefined ? upload.volume_std.toFixed(4) : 'N/A'}<br>
+                <span style="font-size:12px; color:#888;">(Consistency is good)</span>
+              </div>
+              <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
+                <b>Noise Level:</b> ${upload.noise_level !== undefined ? upload.noise_level.toFixed(2) : 'N/A'}<br>
+                <span style="font-size:12px; color:#888;">(Lower = clearer audio)</span>
+              </div>
+              <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
+                <b>Vocab Richness:</b> ${upload.vocab_richness !== undefined ? (upload.vocab_richness*100).toFixed(1) + '%' : 'N/A'}<br>
+                <span style="font-size:12px; color:#888;">(Unique words / total)</span>
+              </div>
+              <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
+                <b>Adv. Vocab:</b> ${upload.advanced_vocab_count !== undefined ? upload.advanced_vocab_count : 'N/A'}<br>
+                <span style="font-size:12px; color:#888;">(Uncommon words used)</span>
+              </div>
+              <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
+                <b>Sentence Var.:</b> ${upload.sentence_var !== undefined ? upload.sentence_var.toFixed(2) : 'N/A'}<br>
+                <span style="font-size:12px; color:#888;">(Sentence length variety)</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 24px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 16px;">
+              <div style="text-align: center; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: bold; color: #007bff;">${upload.wpm}</div>
+                <div style="font-size: 14px; color: #666;">Words per Minute</div>
+              </div>
+              <div style="text-align: center; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: bold; color: #dc3545;">${upload.filler_count}</div>
+                <div style="font-size: 14px; color: #666;">Filler Words</div>
+              </div>
+              <div style="text-align: center; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: bold; color: #ffc107;">${upload.pause_count}</div>
+                <div style="font-size: 14px; color: #666;">Pauses</div>
+              </div>
+              <div style="text-align: center; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+                <div style="font-size: 24px; font-weight: bold; color: #28a745;">${upload.total_words}</div>
+                <div style="font-size: 14px; color: #666;">Total Words</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3 style="margin-bottom: 16px;">Full Transcript</h3>
+            <div style="
+              background: #f8f9fa;
+              padding: 20px;
+              border-radius: 8px;
+              font-size: 16px;
+              line-height: 1.6;
+              color: #333;
+              max-height: 300px;
+              overflow-y: auto;
+            ">${upload.transcript}</div>
+          </div>
+          <div style="margin-top: 24px; text-align: center;">
+            <button onclick="this.closest('.modal').remove()" class="btn btn-primary">Close</button>
+          </div>
+        </div>
+      `;
+      
+      modal.className = 'modal';
+      document.body.appendChild(modal);
+      
+      // Close modal when clicking outside
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+          modal.remove();
+        }
+      });
+    };
+
+    // Logout functionality
+    document.getElementById('logout-btn').onclick = function() {
+      localStorage.removeItem('verbaUser');
+      window.location.href = 'login.html';
+    };
+  </script>
+</body>
+</html> 
