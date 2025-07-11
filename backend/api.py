@@ -296,6 +296,7 @@ def transcribe_upload():
             "noise_level": noise_level,
             "vocab_richness": vocab_richness,
             "advanced_vocab_count": advanced_vocab_count,
+            "advanced_words": advanced_words,
             "sentence_var": sentence_var,
             "score": score
         })
