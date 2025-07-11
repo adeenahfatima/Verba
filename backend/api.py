@@ -1,3 +1,4 @@
+import json
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -10,7 +11,6 @@ from datetime import datetime
 import numpy as np
 import librosa
 from pydub import AudioSegment
-import json
 
 # Download NLTK data only if not already present
 nltk.download('punkt', quiet=True)
