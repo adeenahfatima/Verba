@@ -84,36 +84,14 @@ def status():
 
 @app.route('/transcribe', methods=['GET'])
 def transcribe():
-    try:
-        result = model.transcribe(r"d:\OneDrive - PERSEUS MANAGEMENT GROUP INC\verba\backend\b.wav")
-        transcript = result['text']
-        if isinstance(transcript, list):
-            transcript = " ".join(transcript)
-        segments = result['segments']
-
-        filler_words = ["um", "uh", "like", "you know"]
-        words = nltk.word_tokenize(transcript.lower())
-        total_words = len(words)
-        filler_count = sum(words.count(filler) for filler in filler_words)
-
-        pause_count = 0
-        for i in range(1, len(segments)):
-            gap = get_float(segments[i], 'start') - get_float(segments[i-1], 'end')
-            if gap > 2:
-                pause_count += 1
-
-        duration = get_float(segments[-1], 'end') if segments else 1.0
-        wpm = (total_words / duration) * 60 if duration > 0 else 0
-
-        return jsonify({
-            "transcript": transcript,
-            "total_words": total_words,
-            "filler_count": filler_count,
-            "pause_count": pause_count,
-            "wpm": round(wpm, 2)
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """
+    Test route for transcription - this route is deprecated.
+    Use /transcribe_upload for proper file processing and database storage.
+    """
+    return jsonify({
+        "error": "This route is deprecated. Use /transcribe_upload for proper file processing.",
+        "message": "Upload files through the frontend to get full analysis and database storage."
+    }), 400
 
 @app.route('/transcribe_upload', methods=['POST'])
 def transcribe_upload():
@@ -405,4 +383,3 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Error during db.create_all(): {e}")
     app.run(debug=True, host='127.0.0.1', port=5000)
-
