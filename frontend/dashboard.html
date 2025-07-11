@@ -167,28 +167,28 @@
             <div style="font-size: 1.1rem; color: #444; margin-bottom: 16px;">Overall Score</div>
             <div style="display: flex; flex-wrap: wrap; gap: 16px; justify-content: center;">
               <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
-                <b>Pitch Variation:</b> ${upload.pitch_std !== undefined ? upload.pitch_std.toFixed(2) : 'N/A'}<br>
+                <b>Pitch Variation:</b> ${upload.pitch_std !== undefined && upload.pitch_std !== null ? upload.pitch_std.toFixed(2) : 'N/A'}<br>
                 <span style="font-size:12px; color:#888;">(Higher = more expressive)</span>
               </div>
               <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
-                <b>Volume Mean:</b> ${upload.volume_mean !== undefined ? upload.volume_mean.toFixed(4) : 'N/A'}<br>
-                <b>Std:</b> ${upload.volume_std !== undefined ? upload.volume_std.toFixed(4) : 'N/A'}<br>
+                <b>Volume Mean:</b> ${upload.volume_mean !== undefined && upload.volume_mean !== null ? upload.volume_mean.toFixed(4) : 'N/A'}<br>
+                <b>Std:</b> ${upload.volume_std !== undefined && upload.volume_std !== null ? upload.volume_std.toFixed(4) : 'N/A'}<br>
                 <span style="font-size:12px; color:#888;">(Consistency is good)</span>
               </div>
               <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
-                <b>Noise Level:</b> ${upload.noise_level !== undefined ? upload.noise_level.toFixed(2) : 'N/A'}<br>
+                <b>Noise Level:</b> ${upload.noise_level !== undefined && upload.noise_level !== null ? upload.noise_level.toFixed(2) : 'N/A'}<br>
                 <span style="font-size:12px; color:#888;">(Lower = clearer audio)</span>
               </div>
               <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
-                <b>Vocab Richness:</b> ${upload.vocab_richness !== undefined ? (upload.vocab_richness*100).toFixed(1) + '%' : 'N/A'}<br>
+                <b>Vocab Richness:</b> ${upload.vocab_richness !== undefined && upload.vocab_richness !== null ? (upload.vocab_richness*100).toFixed(1) + '%' : 'N/A'}<br>
                 <span style="font-size:12px; color:#888;">(Unique words / total)</span>
               </div>
               <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
-                <b>Adv. Vocab:</b> ${upload.advanced_vocab_count !== undefined ? upload.advanced_vocab_count : 'N/A'}<br>
+                <b>Adv. Vocab:</b> ${upload.advanced_vocab_count !== undefined && upload.advanced_vocab_count !== null ? upload.advanced_vocab_count : 'N/A'}<br>
                 <span style="font-size:12px; color:#888;">(Uncommon words used)</span>
               </div>
               <div style="background:#f8f9fa; border-radius:8px; padding:12px 18px; min-width:170px;">
-                <b>Sentence Var.:</b> ${upload.sentence_var !== undefined ? upload.sentence_var.toFixed(2) : 'N/A'}<br>
+                <b>Sentence Var.:</b> ${upload.sentence_var !== undefined && upload.sentence_var !== null ? upload.sentence_var.toFixed(2) : 'N/A'}<br>
                 <span style="font-size:12px; color:#888;">(Sentence length variety)</span>
               </div>
             </div>
