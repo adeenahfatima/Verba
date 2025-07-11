@@ -10,6 +10,7 @@ from datetime import datetime
 import numpy as np
 import librosa
 from pydub import AudioSegment
+import json
 
 # Download NLTK data only if not already present
 nltk.download('punkt', quiet=True)
@@ -55,6 +56,7 @@ class Upload(db.Model):
     sentence_var = db.Column(db.Float)
     score = db.Column(db.Integer)
     timestamp = db.Column(db.DateTime, server_default=db.func.now())
+    advanced_words = db.Column(db.Text)  # Store as JSON string
 
 # --- End database setup ---
 
@@ -126,6 +128,8 @@ def transcribe_upload():
             import warnings
             warnings.filterwarnings('ignore')
             y, sr = librosa.load(tmp_path, sr=None)
+            if y is None or len(y) == 0:
+                raise ValueError("Audio file is empty or unreadable.")
             if y is not None and len(y) > 0:
                 # Pitch (F0)
                 pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
@@ -142,7 +146,7 @@ def transcribe_upload():
                 noise_level = float(low_energy) if low_energy is not None else None
         except Exception as audio_err:
             print(f"Audio analysis error: {audio_err}")
-            pitch_std = pitch_mean = volume_mean = volume_std = noise_level = None
+            return jsonify({"error": "Audio file is empty or unreadable. Please upload a valid audio file."}), 400
 
         # --- Whisper Transcription ---
         result = model.transcribe(tmp_path)
@@ -272,7 +276,8 @@ def transcribe_upload():
             vocab_richness=vocab_richness,
             advanced_vocab_count=advanced_vocab_count,
             sentence_var=sentence_var,
-            score=score
+            score=score,
+            advanced_words=json.dumps(advanced_words) # Store as JSON string
         )
         db.session.add(upload)
         db.session.commit()
