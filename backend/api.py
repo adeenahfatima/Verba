@@ -10,6 +10,7 @@ from flask_bcrypt import Bcrypt
 from datetime import datetime
 import numpy as np
 import librosa
+from scipy.ndimage import median_filter
 from pydub import AudioSegment
 
 # Download NLTK data only if not already present
@@ -46,6 +47,7 @@ class Upload(db.Model):
     pause_count = db.Column(db.Integer)
     wpm = db.Column(db.Float)
     # Advanced metrics
+    pitch_variation_percent = db.Column(db.Integer, nullable=True)
     pitch_std = db.Column(db.Float)
     pitch_mean = db.Column(db.Float)
     volume_mean = db.Column(db.Float)
@@ -57,6 +59,8 @@ class Upload(db.Model):
     score = db.Column(db.Integer)
     timestamp = db.Column(db.DateTime, server_default=db.func.now())
     advanced_words = db.Column(db.Text)  # Store as JSON string
+    pitch_mean_hz = db.Column(db.Float, nullable=True)
+    pitch_label = db.Column(db.String(64), nullable=True)
 
 # --- End database setup ---
 
@@ -68,6 +72,16 @@ def get_float(segment, key):
         return float(value)
     except Exception:
         return 0.0
+
+def safe_float(val):
+    try:
+        if val is None:
+            return None
+        if isinstance(val, float) and (np.isnan(val) or np.isinf(val)):
+            return None
+        return float(val)
+    except Exception:
+        return None
 
 @app.route('/', methods=['GET'])
 def home():
@@ -115,109 +129,159 @@ def transcribe_upload():
             suffix = '.wav'
         else:
             suffix = '.mp3'  # Default to mp3 for unknown formats
-        
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             file.save(tmp.name)
             tmp_path = tmp.name
-
         print(f"Processing audio file: {file.filename} -> {tmp_path}")
-        
         # --- Advanced Audio Metrics ---
         pitch_std = pitch_mean = volume_mean = volume_std = noise_level = None
+        pitch_variation_percent = None
+        pitch_mean_hz = None
+        pitch_label = "Pitch not detected"
         try:
             import warnings
             warnings.filterwarnings('ignore')
-            y, sr = librosa.load(tmp_path, sr=None)
-            if y is None or len(y) == 0:
-                raise ValueError("Audio file is empty or unreadable.")
-            if y is not None and len(y) > 0:
-                # Pitch (F0)
-                pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
-                pitch_values = pitches[magnitudes > np.median(magnitudes)]
-                pitch_values = pitch_values[pitch_values > 0]
-                pitch_std = float(np.std(pitch_values)) if len(pitch_values) > 0 else None
-                pitch_mean = float(np.mean(pitch_values)) if len(pitch_values) > 0 else None
-                # Volume (RMS)
-                rms = librosa.feature.rms(y=y)[0]
-                volume_mean = float(np.mean(rms)) if len(rms) > 0 else None
-                volume_std = float(np.std(rms)) if len(rms) > 0 else None
-                # Noise (estimate as low-energy ratio)
-                low_energy = np.sum(rms < (0.5 * np.mean(rms))) / len(rms) if len(rms) > 0 else None
-                noise_level = float(low_energy) if low_energy is not None else None
+            import parselmouth
+            snd = parselmouth.Sound(tmp_path)
+            Fs = snd.sampling_frequency
+            x = snd.values.T.flatten()
+            if len(x) == 0:
+                print("Audio file is empty")
+                raise ValueError("Empty audio file")
+            pitch = snd.to_pitch(time_step=0.01, pitch_floor=50.0, pitch_ceiling=500.0)
+            pitch_values = pitch.selected_array['frequency']
+            valid_pitch_values = pitch_values[
+                (pitch_values > 0) &
+                (pitch_values >= 50) &
+                (pitch_values <= 500) &
+                (~np.isnan(pitch_values)) &
+                (~np.isinf(pitch_values))
+            ]
+            print(f"Total pitch frames: {len(pitch_values)}")
+            print(f"Valid pitch frames: {len(valid_pitch_values)}")
+            if len(valid_pitch_values) > 5:
+                Q1 = np.percentile(valid_pitch_values, 10)
+                Q3 = np.percentile(valid_pitch_values, 90)
+                IQR = Q3 - Q1
+                lower_bound = Q1 - 2.0 * IQR
+                upper_bound = Q3 + 2.0 * IQR
+                filtered_pitch = valid_pitch_values[(valid_pitch_values >= lower_bound) & (valid_pitch_values <= upper_bound)]
+                if len(filtered_pitch) < len(valid_pitch_values) * 0.2:
+                    low = np.percentile(valid_pitch_values, 5)
+                    high = np.percentile(valid_pitch_values, 95)
+                    filtered_pitch = valid_pitch_values[(valid_pitch_values >= low) & (valid_pitch_values <= high)]
+                if len(filtered_pitch) > 0:
+                    pitch_mean = float(np.mean(filtered_pitch))
+                    pitch_std = float(np.std(filtered_pitch))
+                    pitch_mean_hz = round(pitch_mean)
+                    min_std = 2.0
+                    max_std = 20.0
+                    variation = np.clip((pitch_std - min_std) / (max_std - min_std), 0, 1)
+                    pitch_variation_percent = round(variation * 100)
+                    if pitch_mean < 85:
+                        pitch_label = "Very deep voice"
+                    elif pitch_mean < 110:
+                        pitch_label = "Deep voice"
+                    elif pitch_mean < 140:
+                        pitch_label = "Low-moderate voice"
+                    elif pitch_mean < 180:
+                        pitch_label = "Moderate voice"
+                    elif pitch_mean < 220:
+                        pitch_label = "Higher voice"
+                    elif pitch_mean < 300:
+                        pitch_label = "High voice"
+                    else:
+                        pitch_label = "Very high voice"
+                    print(f"Pitch analysis successful: mean={pitch_mean:.2f}Hz, std={pitch_std:.2f}, variation={pitch_variation_percent}%, label={pitch_label}")
+                else:
+                    print("No valid pitch values after filtering")
+                    pitch_std = 0.0
+                    pitch_mean = 0.0
+                    pitch_variation_percent = 0
+                    pitch_mean_hz = 0
+            else:
+                print(f"Insufficient voiced segments: only {len(valid_pitch_values)} frames")
+                pitch_std = 0.0
+                pitch_mean = 0.0
+                pitch_variation_percent = 0
+                pitch_mean_hz = 0
+            frame_length = int(0.050 * Fs)
+            hop_length = int(0.025 * Fs)
+            if len(x) >= frame_length:
+                frames = np.lib.stride_tricks.sliding_window_view(x, frame_length)[::hop_length]
+                rms = np.sqrt(np.mean(frames**2, axis=1))
+                valid_rms = rms[rms > 1e-10]
+                if len(valid_rms) > 0:
+                    volume_mean = float(np.mean(valid_rms))
+                    volume_std = float(np.std(valid_rms))
+                    mean_rms = np.mean(valid_rms)
+                    threshold = 0.1 * mean_rms
+                    low_energy_ratio = np.sum(valid_rms < threshold) / len(valid_rms)
+                    noise_level = float(low_energy_ratio)
+                else:
+                    volume_mean = volume_std = noise_level = None
+            else:
+                volume_mean = volume_std = noise_level = None
+        except ImportError:
+            print("parselmouth not installed. Please install with: pip install praat-parselmouth")
+            return jsonify({"error": "Speech analysis library not available. Please contact support."}), 500
         except Exception as audio_err:
-            print(f"Audio analysis error: {audio_err}")
-            return jsonify({"error": "Audio file is empty or unreadable. Please upload a valid audio file."}), 400
-
+            import traceback
+            traceback.print_exc()
+            pitch_std = pitch_mean = volume_mean = volume_std = noise_level = None
+            pitch_variation_percent = None
+            pitch_mean_hz = None
+            pitch_label = "Pitch not detected"
         # --- Whisper Transcription ---
         result = model.transcribe(tmp_path)
         transcript = result['text']
         if isinstance(transcript, list):
             transcript = " ".join(transcript)
         segments = result['segments']
-
         filler_words = ["um", "uh", "like", "you know"]
         words = nltk.word_tokenize(transcript.lower())
         total_words = len(words)
         filler_count = sum(words.count(filler) for filler in filler_words)
-
         pause_count = 0
         for i in range(1, len(segments)):
             gap = get_float(segments[i], 'start') - get_float(segments[i-1], 'end')
             if gap > 2:
                 pause_count += 1
-
         duration = get_float(segments[-1], 'end') if segments else 1.0
         wpm = (total_words / duration) * 60 if duration > 0 else 0
-
-        # --- Advanced Transcript Metrics ---
         vocab_richness = advanced_vocab_count = sentence_var = None
         try:
-            # Vocabulary richness
             unique_words = set(words)
             vocab_richness = len(unique_words) / total_words if total_words > 0 else None
-            # Advanced vocabulary (not in top 2000 common English words)
             common_words = set(nltk.corpus.words.words()[:2000])
             advanced_words = [w for w in unique_words if w.isalpha() and w not in common_words]
             advanced_vocab_count = len(advanced_words)
-            # Sentence structure
             sentences = nltk.sent_tokenize(transcript)
             sentence_lengths = [len(nltk.word_tokenize(s)) for s in sentences]
             sentence_var = float(np.std(sentence_lengths)) if len(sentence_lengths) > 1 else None
         except Exception as text_err:
             print(f"Transcript analysis error: {text_err}")
             vocab_richness = advanced_vocab_count = sentence_var = None
-
-        # --- Composite Score (out of 100) ---
         score = 0
         try:
-            # WPM: ideal 110-160
             if 110 <= wpm <= 160:
                 score += 15
             elif 90 <= wpm < 110 or 160 < wpm <= 180:
                 score += 10
             elif 70 <= wpm < 90 or 180 < wpm <= 200:
                 score += 5
-            # Filler words: fewer is better
             if filler_count == 0:
                 score += 15
             elif filler_count <= 2:
                 score += 10
             elif filler_count <= 5:
                 score += 5
-            # Pauses: 0-2 is best
             if pause_count <= 2:
                 score += 10
             elif pause_count <= 5:
                 score += 5
-            # Pitch variation: higher is better
-            if pitch_std is not None:
-                if pitch_std > 20:
-                    score += 10
-                elif pitch_std > 10:
-                    score += 7
-                elif pitch_std > 5:
-                    score += 4
-            # Volume consistency: lower std is better
+            if pitch_variation_percent is not None:
+                score += round(pitch_variation_percent / 10)
             if volume_std is not None:
                 if volume_std < 0.01:
                     score += 10
@@ -225,7 +289,6 @@ def transcribe_upload():
                     score += 7
                 elif volume_std < 0.05:
                     score += 4
-            # Noise: lower is better
             if noise_level is not None:
                 if noise_level < 0.2:
                     score += 10
@@ -233,7 +296,6 @@ def transcribe_upload():
                     score += 7
                 elif noise_level < 0.6:
                     score += 4
-            # Vocabulary richness
             if vocab_richness is not None:
                 if vocab_richness > 0.5:
                     score += 10
@@ -241,13 +303,11 @@ def transcribe_upload():
                     score += 7
                 elif vocab_richness > 0.15:
                     score += 4
-            # Advanced vocab
             if advanced_vocab_count is not None:
                 if advanced_vocab_count > 10:
                     score += 5
                 elif advanced_vocab_count > 5:
                     score += 3
-            # Sentence structure
             if sentence_var is not None:
                 if sentence_var > 5:
                     score += 5
@@ -256,10 +316,9 @@ def transcribe_upload():
         except Exception as score_err:
             print(f"Score calculation error: {score_err}")
             score = 0
-
         print(f"Analysis complete: {total_words} words, {filler_count} fillers, {pause_count} pauses, {wpm:.2f} wpm, pitch std: {pitch_std}, volume std: {volume_std}, noise: {noise_level}, vocab richness: {vocab_richness}, advanced vocab: {advanced_vocab_count}, sentence var: {sentence_var}, score: {score}")
+        # Find this section in your transcribe_upload function and replace it:
 
-        # Save to database (now with advanced metrics)
         upload = Upload(
             user_id=user_id,
             filename=file.filename,
@@ -270,6 +329,9 @@ def transcribe_upload():
             wpm=round(wpm, 2),
             pitch_std=pitch_std,
             pitch_mean=pitch_mean,
+            pitch_mean_hz=pitch_mean_hz,  # ADD THIS LINE
+            pitch_label=pitch_label,      # ADD THIS LINE
+            pitch_variation_percent=pitch_variation_percent,  # ADD THIS LINE
             volume_mean=volume_mean,
             volume_std=volume_std,
             noise_level=noise_level,
@@ -277,37 +339,43 @@ def transcribe_upload():
             advanced_vocab_count=advanced_vocab_count,
             sentence_var=sentence_var,
             score=score,
-            advanced_words=json.dumps(advanced_words) # Store as JSON string
+            advanced_words=json.dumps(advanced_words)
         )
         db.session.add(upload)
         db.session.commit()
-
-        # Clean up temporary file
         try:
             os.unlink(tmp_path)
         except:
-            pass  # Ignore cleanup errors
-
+            pass
+        if pitch_mean_hz is not None and pitch_mean_hz > 0:
+            pitch_explanation = f"{pitch_mean_hz} Hz — {pitch_label}"
+        else:
+            pitch_explanation = "N/A — Pitch not detected (audio may be too quiet or unclear)"
         return jsonify({
             "transcript": transcript,
             "total_words": total_words,
             "filler_count": filler_count,
             "pause_count": pause_count,
-            "wpm": round(wpm, 2),
-            "pitch_std": pitch_std,
-            "pitch_mean": pitch_mean,
-            "volume_mean": volume_mean,
-            "volume_std": volume_std,
-            "noise_level": noise_level,
-            "vocab_richness": vocab_richness,
+            "wpm": safe_float(wpm),
+            "pitch_std": safe_float(pitch_std),
+            "pitch_mean": safe_float(pitch_mean),
+            "pitch_mean_hz": pitch_mean_hz,
+            "pitch_mean_explained": pitch_explanation,
+            "pitch_variation_percent": safe_float(pitch_variation_percent),
+            "volume_mean": safe_float(volume_mean),
+            "volume_std": safe_float(volume_std),
+            "noise_level": safe_float(noise_level),
+            "vocab_richness": safe_float(vocab_richness),
             "advanced_vocab_count": advanced_vocab_count,
             "advanced_words": advanced_words,
-            "sentence_var": sentence_var,
+            "sentence_var": safe_float(sentence_var),
             "score": score
         })
     except Exception as e:
         print(f"Error processing upload: {str(e)}")
         return jsonify({"error": "Audio processing failed. Please try a different or clearer audio file."}), 500
+
+# Find your get_uploads function and replace the return statement:
 
 @app.route('/uploads/<int:user_id>', methods=['GET'])
 def get_uploads(user_id):
@@ -323,6 +391,10 @@ def get_uploads(user_id):
             'wpm': u.wpm,
             'pitch_std': u.pitch_std,
             'pitch_mean': u.pitch_mean,
+            'pitch_mean_hz': u.pitch_mean_hz,  # ADD THIS LINE
+            'pitch_label': u.pitch_label,      # ADD THIS LINE
+            'pitch_variation_percent': u.pitch_variation_percent,  # ADD THIS LINE
+            'pitch_mean_explained': f"{u.pitch_mean_hz} Hz — {u.pitch_label}" if u.pitch_mean_hz and u.pitch_mean_hz > 0 else "N/A — Pitch not detected",  # ADD THIS LINE
             'volume_mean': u.volume_mean,
             'volume_std': u.volume_std,
             'noise_level': u.noise_level,
@@ -330,7 +402,8 @@ def get_uploads(user_id):
             'advanced_vocab_count': u.advanced_vocab_count,
             'sentence_var': u.sentence_var,
             'score': u.score,
-            'timestamp': u.timestamp.isoformat() if u.timestamp else None
+            'timestamp': u.timestamp.isoformat() if u.timestamp else None,
+            'advanced_words': json.loads(u.advanced_words) if u.advanced_words else []  # ADD THIS LINE
         } for u in uploads
     ])
 
@@ -389,3 +462,11 @@ if __name__ == '__main__':
     except Exception as e:
         print(f"Error during db.create_all(): {e}")
     app.run(debug=True, host='127.0.0.1', port=5000)
+
+import sqlite3
+conn = sqlite3.connect('backend/instance/verba.db')
+c = conn.cursor()
+c.execute("PRAGMA table_info(upload)")
+for row in c.fetchall():
+    print(row)
+conn.close()
