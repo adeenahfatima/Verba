@@ -196,7 +196,10 @@
 
           <div style="margin-bottom: 24px; text-align:center;">
             <b>Uncommon Words:</b><br>
-            <span style="font-size: 1rem; color: #007bff;">${upload.advanced_words && upload.advanced_words.length ? upload.advanced_words.join(', ') : 'None'}</span>
+            <span style="font-size: 1rem; color: #007bff;">
+              <button onclick="toggleUncommonWords(this)" style="background: #e0e7ff; color: #007bff; border: 1px solid #b3b3ff; border-radius: 8px; padding: 2px 14px; font-size: 1rem; cursor: pointer; margin-bottom: 6px;">Show</button>
+              <span class="uncommon-words-list" style="display:none;">${upload.advanced_words && upload.advanced_words.length ? upload.advanced_words.join(', ') : 'None'}</span>
+            </span>
           </div>
 
           <div style="margin-bottom: 24px;">
@@ -266,6 +269,18 @@
         }
       });
     };
+
+    // Toggle function for uncommon words
+    window.toggleUncommonWords = function(btn) {
+      const list = btn.parentElement.querySelector('.uncommon-words-list');
+      if (list.style.display === 'none') {
+        list.style.display = 'inline';
+        btn.textContent = 'Hide';
+      } else {
+        list.style.display = 'none';
+        btn.textContent = 'Show';
+      }
+    }
 
     // Logout functionality
     document.getElementById('logout-btn').onclick = function() {
