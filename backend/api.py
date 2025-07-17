@@ -1,4 +1,4 @@
-import json
+mport json
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -12,11 +12,15 @@ import numpy as np
 import librosa
 from scipy.ndimage import median_filter
 from pydub import AudioSegment
+import requests
+from dotenv import load_dotenv
 
 # Download NLTK data only if not already present
 nltk.download('punkt', quiet=True)
 nltk.download('wordnet', quiet=True)
 nltk.download('omw-1.4', quiet=True)
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -82,6 +86,151 @@ def safe_float(val):
         return float(val)
     except Exception:
         return None
+
+def generate_actionable_tips(metrics):
+    """
+    Given a dict of analysis metrics, return a list of actionable tips for the user.
+    """
+    tips = []
+    wpm = metrics.get('wpm')
+    filler_count = metrics.get('filler_count')
+    pause_count = metrics.get('pause_count')
+    pitch_variation_percent = metrics.get('pitch_variation_percent')
+    volume_std = metrics.get('volume_std')
+    noise_level = metrics.get('noise_level')
+    vocab_richness = metrics.get('vocab_richness')
+    advanced_vocab_count = metrics.get('advanced_vocab_count')
+    sentence_var = metrics.get('sentence_var')
+
+    # Pace
+    if wpm is not None:
+        if wpm < 110:
+            tips.append("Try to speak a little faster for better engagement.")
+        elif wpm > 160:
+            tips.append("Try to slow down for better clarity.")
+        else:
+            tips.append("Your speaking pace is good!")
+
+    # Filler words
+    if filler_count is not None:
+        if filler_count > 5:
+            tips.append("Practice reducing filler words like 'um', 'uh', and 'like'.")
+        elif filler_count > 0:
+            tips.append("Great job! Try to reduce filler words even further.")
+        else:
+            tips.append("Excellent! No filler words detected.")
+
+    # Pauses
+    if pause_count is not None:
+        if pause_count == 0:
+            tips.append("Try to add natural pauses to let your audience absorb information.")
+        elif pause_count > 5:
+            tips.append("Try to reduce long pauses to keep your speech flowing.")
+        else:
+            tips.append("Your use of pauses is good.")
+
+    # Pitch variation
+    if pitch_variation_percent is not None:
+        if pitch_variation_percent < 20:
+            tips.append("Vary your pitch more to sound more engaging and expressive.")
+        elif pitch_variation_percent > 70:
+            tips.append("Your pitch variation is excellent!")
+        else:
+            tips.append("Good pitch variation. Keep it up!")
+
+    # Volume variation
+    if volume_std is not None:
+        if volume_std < 0.01:
+            tips.append("Try to add more vocal energy and variation to your speech.")
+        elif volume_std > 0.05:
+            tips.append("Your vocal energy is great!")
+        else:
+            tips.append("Good vocal energy. Keep it up!")
+
+    # Noise level
+    if noise_level is not None:
+        if noise_level > 0.4:
+            tips.append("Try to record in a quieter environment for better clarity.")
+        else:
+            tips.append("Background noise is at a good level.")
+
+    # Vocabulary richness
+    if vocab_richness is not None:
+        if vocab_richness < 0.2:
+            tips.append("Try to use a wider range of words to make your speech more interesting.")
+        elif vocab_richness > 0.5:
+            tips.append("Excellent vocabulary usage!")
+        else:
+            tips.append("Good vocabulary variety. Keep practicing!")
+
+    # Advanced vocabulary
+    if advanced_vocab_count is not None:
+        if advanced_vocab_count < 3:
+            tips.append("Try to use more advanced words to impress your audience.")
+        elif advanced_vocab_count > 10:
+            tips.append("Great use of advanced vocabulary!")
+
+    # Sentence variety
+    if sentence_var is not None:
+        if sentence_var < 2:
+            tips.append("Try to vary your sentence lengths for a more dynamic speech.")
+        elif sentence_var > 5:
+            tips.append("Excellent sentence variety!")
+        else:
+            tips.append("Good sentence variety. Keep it up!")
+
+    # Ensure at least one tip is always returned
+    if not tips:
+        tips.append("Great job on completing your speech! Keep practicing and you'll see even more improvement.")
+    return tips
+
+def get_ai_advice(transcript, metrics):
+    """
+    Call Hugging Face Inference API to get bonus AI-powered advice for the user's speech.
+    """
+    api_key = os.environ.get('HF_API_KEY')
+    if not api_key:
+        return None
+    # You can change the model to another conversational/instruct model if desired
+    model = "google/flan-t5-small"
+    prompt = (
+        "You are a public speaking coach. "
+        "Given the following speech transcript and analysis metrics, provide one or two personalized, encouraging, and actionable tips to help the speaker improve. "
+        "Be specific and supportive.\n"
+        f"Transcript: {transcript}\n"
+        f"Metrics: {metrics}\n"
+        "Advice:"
+    )
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "inputs": prompt,
+        "parameters": {"max_new_tokens": 80}
+    }
+    try:
+        response = requests.post(
+            f"https://api-inference.huggingface.co/models/{model}",
+            headers=headers,
+            json=payload,
+            timeout=15
+        )
+        if response.status_code == 200:
+            result = response.json()
+            if isinstance(result, list) and len(result) > 0 and 'generated_text' in result[0]:
+                return result[0]['generated_text'].strip()
+            elif isinstance(result, dict) and 'generated_text' in result:
+                return result['generated_text'].strip()
+            elif isinstance(result, list) and len(result) > 0 and 'generated_text' in result[-1]:
+                return result[-1]['generated_text'].strip()
+            elif isinstance(result, list) and len(result) > 0 and isinstance(result[0], str):
+                return result[0].strip()
+        else:
+            print(f"Hugging Face API error: {response.status_code} {response.text}")
+    except Exception as e:
+        print(f"Error calling Hugging Face API: {e}")
+    return None
 
 @app.route('/', methods=['GET'])
 def home():
@@ -351,6 +500,24 @@ def transcribe_upload():
             pitch_explanation = f"{pitch_mean_hz} Hz — {pitch_label}"
         else:
             pitch_explanation = "N/A — Pitch not detected (audio may be too quiet or unclear)"
+
+        # Generate actionable tips
+        analysis_metrics = {
+            "wpm": safe_float(wpm),
+            "filler_count": filler_count,
+            "pause_count": pause_count,
+            "pitch_variation_percent": safe_float(pitch_variation_percent),
+            "volume_std": safe_float(volume_std),
+            "noise_level": safe_float(noise_level),
+            "vocab_richness": safe_float(vocab_richness),
+            "advanced_vocab_count": advanced_vocab_count,
+            "sentence_var": safe_float(sentence_var)
+        }
+        actionable_tips = generate_actionable_tips(analysis_metrics)
+
+        # Get AI-powered advice (bonus)
+        ai_advice = get_ai_advice(transcript, analysis_metrics)
+
         return jsonify({
             "transcript": transcript,
             "total_words": total_words,
@@ -369,7 +536,9 @@ def transcribe_upload():
             "advanced_vocab_count": advanced_vocab_count,
             "advanced_words": advanced_words,
             "sentence_var": safe_float(sentence_var),
-            "score": score
+            "score": score,
+            "actionable_tips": actionable_tips,
+            "ai_advice": ai_advice
         })
     except Exception as e:
         print(f"Error processing upload: {str(e)}")
