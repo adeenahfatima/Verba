@@ -193,9 +193,28 @@
               </div>
             </div>
           </div>
+
           <div style="margin-bottom: 24px; text-align:center;">
             <b>Uncommon Words:</b><br>
             <span style="font-size: 1rem; color: #007bff;">${upload.advanced_words && upload.advanced_words.length ? upload.advanced_words.join(', ') : 'None'}</span>
+          </div>
+
+          <div style="margin-bottom: 24px;">
+            <h3 style="margin-bottom: 12px; color: #007bff;">Actionable Tips</h3>
+            <ul style="text-align:left; max-width:600px; margin:0 auto; font-size:1.08rem; color:#222;">
+              ${(upload.actionable_tips && upload.actionable_tips.length) ? upload.actionable_tips.map(tip => `<li style='margin-bottom:8px;'>${tip}</li>`).join('') : '<li>No tips available for this upload.</li>'}
+            </ul>
+          </div>
+
+          <div style="margin-bottom: 32px; display: flex; justify-content: center;">
+            <div style="background: linear-gradient(90deg, #e0e7ff 0%, #fffbe0 100%); border-radius: 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.10); padding: 24px 32px; max-width: 600px; width: 100%; display: flex; align-items: flex-start; gap: 18px; border: 2px solid #b3b3ff;">
+              <div>
+                <div style="font-size: 1.15rem; font-weight: 700; color: #6c63ff; margin-bottom: 8px; letter-spacing: 0.01em;">AI-Powered Bonus Advice</div>
+                <div style="font-size: 1.08rem; color: #222;">
+                  ${upload.ai_advice ? upload.ai_advice.replace(/\n/g, '<br>') : '<span style=\'color:#888\'>No AI advice available for this upload. Try again later!</span>'}
+                </div>
+              </div>
+            </div>
           </div>
 
           <div style="margin-bottom: 24px;">
