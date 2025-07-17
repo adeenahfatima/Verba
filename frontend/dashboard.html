@@ -194,10 +194,10 @@
             </div>
           </div>
 
-          <div style="margin-bottom: 24px; text-align:center;">
-            <b>Uncommon Words:</b><br>
-            <span style="font-size: 1rem; color: #007bff;">
-              <button onclick="toggleUncommonWords(this)" style="background: #e0e7ff; color: #007bff; border: 1px solid #b3b3ff; border-radius: 8px; padding: 2px 14px; font-size: 1rem; cursor: pointer; margin-bottom: 6px;">Show</button>
+          <div style="margin-bottom: 24px; display: flex; align-items: flex-start; gap: 12px;">
+            <b style="margin-top: 6px;">Uncommon Words:</b>
+            <span style="font-size: 1rem; color: #007bff; display: flex; align-items: center; gap: 10px;">
+              <button onclick="toggleUncommonWords(this)" class="btn btn-secondary uncommon-toggle-btn" style="padding: 4px 22px; font-size: 1rem; margin-bottom: 6px;">Show</button>
               <span class="uncommon-words-list" style="display:none;">${upload.advanced_words && upload.advanced_words.length ? upload.advanced_words.join(', ') : 'None'}</span>
             </span>
           </div>
@@ -281,6 +281,26 @@
         btn.textContent = 'Show';
       }
     }
+
+    // Add theme styling for uncommon words toggle button
+    const uncommonBtnStyle = document.createElement('style');
+    uncommonBtnStyle.innerHTML = `
+      .uncommon-toggle-btn {
+        border-radius: var(--radius);
+        font-weight: 700;
+        background: var(--bg);
+        color: var(--text);
+        border: 2px solid var(--border);
+        transition: background 0.18s, box-shadow 0.18s;
+        box-shadow: var(--shadow-soft);
+        letter-spacing: 0.03em;
+      }
+      .uncommon-toggle-btn:hover {
+        background: #ffe066;
+        color: #181818;
+      }
+    `;
+    document.head.appendChild(uncommonBtnStyle);
 
     // Logout functionality
     document.getElementById('logout-btn').onclick = function() {
