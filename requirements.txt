@@ -1,0 +1,14 @@
+flask==2.3.3
+flask-cors==4.0.0
+openai-whisper==20250625
+nltk==3.9.1
+torch==2.4.1
+numpy==1.24.4
+flask-sqlalchemy==3.1.1
+librosa==0.10.1
+flask-bcrypt==1.0.1
+pydub==0.25.1 
+pyAudioAnalysis 
+matplotlib 
+praat-parselmouth 
+python-dotenv 
